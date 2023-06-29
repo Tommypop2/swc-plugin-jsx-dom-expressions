@@ -847,7 +847,7 @@ where
             })) = &mut attribute.value
             {
                 if reserved_name_space
-                    || !matches!(**expr, Expr::Lit(ref lit) if matches!(lit, Lit::Str(_) | Lit::Num(_)))
+                    || !matches!(expr.as_lit(), Some(Lit::Str(_)) | Some(Lit::Num(_)))
                 {
                     if key == "ref" {
                         loop {
@@ -1406,44 +1406,47 @@ where
                     .unwrap_or(&key.as_str())
                     .to_string();
 
-                if value.is_some() && CHILD_PROPERTIES.contains(key.as_str()) {
-                    results.exprs.push(self.set_attr(
-                        &elem.clone().unwrap(),
-                        &key,
-                        &Expr::Lit(value.unwrap().clone()),
-                        &AttrOptions {
-                            is_svg,
-                            dynamic: false,
-                            is_ce,
-                            prev_id: None,
-                            tag_name: results.tag_name.clone(),
-                        },
-                    ));
-                } else {
-                    if !is_svg {
-                        key = key.to_lowercase();
+                match value {
+                    Some(value) if CHILD_PROPERTIES.contains(key.as_str()) => {
+                        results.exprs.push(self.set_attr(
+                            &elem.clone().unwrap(),
+                            &key,
+                            &Expr::Lit(value.clone()),
+                            &AttrOptions {
+                                is_svg,
+                                dynamic: false,
+                                is_ce,
+                                prev_id: None,
+                                tag_name: results.tag_name.clone(),
+                            },
+                        ))
                     }
-                    results.template += &format!(" {}", key);
-
-                    if let Some(value) = value {
-                        let mut text = lit_to_string(value);
-                        if key == "style" || key == "class" {
-                            text = trim_whitespace(&text);
-                            if key == "style" {
-                                text = Regex::new(r"; ")
-                                    .unwrap()
-                                    .replace_all(&text, ";")
-                                    .to_string();
-                                text = Regex::new(r": ")
-                                    .unwrap()
-                                    .replace_all(&text, ":")
-                                    .to_string();
-                            }
+                    _ => {
+                        if !is_svg {
+                            key = key.to_lowercase();
                         }
-                        results.template +=
-                            &format!(r#"="{}""#, escape_backticks(&escape_html(&text, true)));
-                    } else {
-                        continue;
+                        results.template += &format!(" {}", key);
+
+                        if let Some(value) = value {
+                            let mut text = lit_to_string(value);
+                            if key == "style" || key == "class" {
+                                text = trim_whitespace(&text);
+                                if key == "style" {
+                                    text = Regex::new(r"; ")
+                                        .unwrap()
+                                        .replace_all(&text, ";")
+                                        .to_string();
+                                    text = Regex::new(r": ")
+                                        .unwrap()
+                                        .replace_all(&text, ":")
+                                        .to_string();
+                                }
+                            }
+                            results.template +=
+                                &format!(r#"="{}""#, escape_backticks(&escape_html(&text, true)));
+                        } else {
+                            continue;
+                        }
                     }
                 }
             }
@@ -1941,7 +1944,7 @@ where
                             JSXAttrName::JSXNamespacedName(n) => &n.ns.sym == "use",
                         } || (if let Some(JSXAttrValue::JSXExprContainer(expr)) = &attr.value {
                             if let JSXExpr::Expr(expr) = &expr.expr {
-                                !matches!(**expr, Expr::Lit(Lit::Str(_)) | Expr::Lit(Lit::Num(_)))
+                                !matches!(expr.as_lit(), Some(Lit::Str(_)) | Some(Lit::Num(_)))
                             } else {
                                 false
                             }
